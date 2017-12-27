@@ -1,0 +1,5 @@
+ultibo-coverage-s-files/
+*.bin
+*.elf
+*.o
+*.txt
