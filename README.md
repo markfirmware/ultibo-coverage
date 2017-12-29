@@ -4,6 +4,8 @@ ultiboinstaller-with-coverage.sh - installs Ultibo with svc calls at routine exi
 
 fpc-with-coverage.sh - compiles a pascal file with svc calls at routine exit points for logging, threads, and serial units
 
+insert-svc.awk - actually inserts the svc calls in an assembler file
+
 coveragetester.lpr - test program displays coverage counters every second
 
 run-coveragetester.sh - compiles and runs test program with logging output send to stdout

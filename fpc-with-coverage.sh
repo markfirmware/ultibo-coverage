@@ -9,21 +9,29 @@ fi
 
 SOURCE=$(basename $SOURCE)
 SOURCE=${SOURCE%.*}.s
-INSERTCOVERAGE=n
-for i in logging.s serial.s threads.s
+INSERTCOVERAGE=0
+
+for i in arp devices dhcp dns icmp ip iphlapi ipv6 logging network protocol serial services sockets tcp threads transport udp winsock winsock2
 do
-    if [[ $SOURCE == $i ]]
+    if [[ $SOURCE == ${i}.s ]]
     then
-        INSERTCOVERAGE=y
+        INSERTCOVERAGE=1
+        FILENAME=$i
     fi
 done
 
-if [[ $INSERTCOVERAGE == "y" ]]
+CORE=$HOME/ultibo/core/fpc/source/rtl/ultibo/core
+COVERAGEMAP=$CORE/coveragemap.pas
+DATA=$HOME/ultibo/core/fpc/source/rtl/units/arm-ultibo/$SOURCE
+
+if [[ $INSERTCOVERAGE == "1" ]]
 then
     CMD="fpc -s -al $*"
     echo $SOURCE $CMD
     eval $CMD
-    sed -i '/ldmea.r11,{.*r11,r13,r15}/i svc #0x0' /root/ultibo/core/fpc/source/rtl/units/arm-ultibo/$SOURCE
+    echo " AddFileName('$FILENAME');" >> $COVERAGEMAP
+    cp -a $DATA $DATA.in
+    awk -f $HOME/github.com/markfirmware/ultibo-coverage/insert-svc.awk $DATA.in > $DATA
     ./ppas.sh
 else
     CMD="fpc $*"

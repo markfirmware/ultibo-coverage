@@ -411,8 +411,23 @@ fi
 # Ultibo RTL for ARMv7
 make rtl_clean CROSSINSTALL=1 OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv7a BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV7A -CfVFPV3 -CIARM -CaEABIHF -OoFASTMATH" FPC=$BASE/fpc/bin/fpc
 exitFailure
+echo 0 > $BASE/fpc/source/rtl/ultibo/core/coveragesubroutinecounter.txt
+cat > $BASE/fpc/source/rtl/ultibo/core/coveragemap.pas << __EOF__
+unit CoverageMap;
+interface
+implementation
+procedure AddFileName(FileName:String);
+begin
+end;
+
+initialization
+__EOF__
+sed -i '/^procedure StartupHandler;$/a procedure CoverageSvcHandler;' $BASE/fpc/source/rtl/ultibo/core/bootqemuvpb.pas
+sed -i '/^end\.$/i procedure CoverageSvcHandler; assembler; nostackframe;\nasm\n stmfd r13!,{r14}\n ldmfd r13!,{r15}^\nend;' $BASE/fpc/source/rtl/ultibo/core/bootqemuvpb.pas
+sed -i 's/ARMv7SoftwareInterruptHandler/CoverageSvcHandler/g' $BASE/fpc/source/rtl/ultibo/core/bootqemuvpb.pas
 make rtl OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv7a BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV7A -CfVFPV3 -CIARM -CaEABIHF -OoFASTMATH" FPC=$INSTALLER_DIR/fpc-with-coverage.sh
 exitFailure
+echo "end." >> $BASE/fpc/source/rtl/ultibo/core/coveragemap.pas
 rm -rf $INSTALLER_DIR/ultibo-coverage-s-files
 mkdir -p $INSTALLER_DIR/ultibo-coverage-s-files
 cp -a $HOME/ultibo/core/fpc/source/rtl/units/arm-ultibo/*.s $INSTALLER_DIR/ultibo-coverage-s-files
