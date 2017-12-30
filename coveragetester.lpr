@@ -26,6 +26,7 @@ type
   R0:LongWord;
  end;
 
+ PCoverageMeter = ^TCoverageMeter;
  TCoverageMeter = record
   TraceCounter:LongWord;
   TraceBuffer:Array[0..TraceLength - 1] of TCoverageEvent;
@@ -40,7 +41,7 @@ const
 
 procedure CoverageSwiHandler; assembler; nostackframe;
 asm
-        stmfd  r13!,{r0-r5,r14}
+        stmfd  r13!,{r0-r4,r14}
         //Read the Multiprocessor Affinity (MPIDR) register from the system control coprocessor CP15
         mrc    p15,#0,r3,cr0,cr0,#5
         //Mask off the CPUID value
@@ -53,62 +54,108 @@ asm
         ldr    r2,[r3,#TCoverageMeter.TraceCounter]
         add    r2,#1 // r2 is the event counter
         ldr    r1,=TraceLength-1
-        and    r1,r2 // r1 is wrapped index
+        and    r1,r2 // wrapped index
         add    r4,r4,r1,lsl #2 // r4 points to event record
-        ldr    r5,[r14,#-4] // get svc instruction
-        bic    r5,#0xFF000000 // just the svc code number
-        str    r5,[r4,#TCoverageEvent.SubroutineId]
+        ldr    r1,[r14,#-4] // get svc instruction
+        bic    r1,#0xFF000000 // just the svc code number
+        str    r1,[r4,#TCoverageEvent.SubroutineId]
         str    r0,[r4,#TCoverageEvent.R0]
         str    r2,[r3,#TCoverageMeter.TraceCounter]
-        ldmfd  r13!,{r0-r5,r15}^
+        ldmfd  r13!,{r0-r4,r15}^
 end;
 
 const
- MaxCounters = 16*1024;
+ MaxSubroutines = 16*1024;
+
+type
+ PSubroutine = ^TSubroutine;
+ TSubroutine = record
+  Id:LongWord;
+  Counter:LongWord;
+ end;
+
+function CompareCounter(A,B:Pointer):Integer;
+begin
+ Result:=PSubroutine(A).Counter - PSubroutine(B).Counter;
+end;
+
+type
+ TCoverageAnalyzer = record
+  Meter:PCoverageMeter;
+  EventsProcessed:LongWord;
+  Subroutines:Array[0..MaxSubroutines - 1] of TSubroutine;
+ end;
 
 var
  I:Integer;
  Next:LongWord;
- EventsProcessed:LongWord;
- Counters:Array[0..MaxCounters - 1] of LongWord;
+ CoverageAnalyzers:Array[0..3] of TCoverageAnalyzer;
+ CpuId:LongWord;
+ Sorter:TFPList;
 
 begin
- for I:=Low(CoverageMeters) to High(CoverageMeters) do
-  with CoverageMeters[I] do
-   TraceCounter:=0;
- for I:=Low(Counters) to High(Counters) do
-  Counters[I]:=0;
- EventsProcessed:=0;
+ for CpuId:=0 to 3 do
+  with CoverageAnalyzers[CpuId] do
+   begin
+    Meter:=@CoverageMeters[CpuId];
+    Meter.TraceCounter:=0;
+    EventsProcessed:=0;
+    for I:=Low(Subroutines) to High(Subroutines) do
+     with Subroutines[I] do
+      begin
+       Id:=I;
+       Counter:=0;
+      end;
+   end;
+ Sorter:=TFPList.Create;
  VectorTableSetEntry(VECTOR_TABLE_ENTRY_ARM_SWI,PtrUInt(@CoverageSwiHandler));
  StartLogging;
  while True do
   begin
    Sleep(1*1000);
 // LoggingOutput(Format('cpu 0:%d 1:%d 2:%d 3:%d',[CoverageMeters[0].TraceCounter,CoverageMeters[1].TraceCounter,CoverageMeters[2].TraceCounter,CoverageMeters[3].TraceCounter]));
-   with CoverageMeters[0] do
+   for CpuId:=0 to 3 do
     begin
-     Next:=TraceCounter;
-     LoggingOutput(Format('%8d more events - total %d',[Next - EventsProcessed, Next]));
-     try
-      while EventsProcessed <> Next do
-       begin
-        with TraceBuffer[EventsProcessed and (MaxCounters - 1)] do
-         begin
-          Inc(Counters[SubroutineId]);
-           if Counters[SubroutineId] mod (50*1000) = 0 then
-            LoggingOutput(Format('%8d id %4d %s',[Counters[SubroutineId],SubroutineId,SubroutineNames[SubroutineId]]));
-           Inc(EventsProcessed);
-         end;
-       end;
-     except on E:Exception do
+     with CoverageAnalyzers[CpuId] do
       begin
-       LoggingOutput(Format('',[]));
-       LoggingOutput(Format('exception %s',[E.Message]));
-       LoggingOutput(Format('',[]));
-       Sleep(5*1000);
+       Next:=Meter.TraceCounter;
+//     LoggingOutput(Format('%d %8d more events - total %d',[CpuId,Next - EventsProcessed, Next]));
+       try
+        while EventsProcessed <> Next do
+         begin
+          with Meter.TraceBuffer[EventsProcessed and (MaxSubroutines - 1)] do
+           with Subroutines[SubroutineId] do
+            begin
+             Inc(Counter);
+//           if Counter = 1 then
+//            LoggingOutput(Format('%d %8d id %4d %s',[CpuId,Counter,SubroutineId,SubroutineNames[SubroutineId]]));
+             Inc(EventsProcessed);
+             if EventsProcessed mod (1000*1000) = 0 then
+              begin
+               LoggingOutput(Format('total %d %d',[CpuId,EventsProcessed]));
+               Sorter.Clear;
+               for I:=0 to MaxSubroutines do
+                if Subroutines[I].Counter <> 0 then
+                 Sorter.Add(@Subroutines[I]);
+               Sorter.Sort(CompareCounter);
+               for I:=0 to Sorter.Count - 1 do
+                with PSubroutine(Sorter.Items[I])^ do
+                 LoggingOutput(Format('%8d %s',[Counter,SubroutineNames[Id]]));
+               for I:=0 to MaxSubroutines do
+                Subroutines[I].Counter:=0;
+              end;
+           end;
+         end;
+       except on E:Exception do
+        begin
+         EventsProcessed:=Next;
+         LoggingOutput(Format('',[]));
+         LoggingOutput(Format('exception %s',[E.Message]));
+         LoggingOutput(Format('',[]));
+         Sleep(5*1000);
+        end;
+       end;
       end;
-     end;
     end;
-   EventsProcessed:=Next;
   end;
 end.

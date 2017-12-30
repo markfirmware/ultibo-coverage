@@ -412,22 +412,11 @@ fi
 make rtl_clean CROSSINSTALL=1 OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv7a BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV7A -CfVFPV3 -CIARM -CaEABIHF -OoFASTMATH" FPC=$BASE/fpc/bin/fpc
 exitFailure
 echo 0 > $BASE/fpc/source/rtl/ultibo/core/coveragesubroutinecounter.txt
-cat > $BASE/fpc/source/rtl/ultibo/core/coveragemap.pas << __EOF__
-unit CoverageMap;
-interface
-implementation
-procedure AddFileName(FileName:String);
-begin
-end;
-
-initialization
-__EOF__
 sed -i '/^procedure StartupHandler;$/a procedure CoverageSvcHandler;' $BASE/fpc/source/rtl/ultibo/core/bootqemuvpb.pas
 sed -i '/^end\.$/i procedure CoverageSvcHandler; assembler; nostackframe;\nasm\n stmfd r13!,{r14}\n ldmfd r13!,{r15}^\nend;' $BASE/fpc/source/rtl/ultibo/core/bootqemuvpb.pas
 sed -i 's/ARMv7SoftwareInterruptHandler/CoverageSvcHandler/g' $BASE/fpc/source/rtl/ultibo/core/bootqemuvpb.pas
 make rtl OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv7a BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV7A -CfVFPV3 -CIARM -CaEABIHF -OoFASTMATH" FPC=$INSTALLER_DIR/fpc-with-coverage.sh
 exitFailure
-echo "end." >> $BASE/fpc/source/rtl/ultibo/core/coveragemap.pas
 rm -rf $INSTALLER_DIR/ultibo-coverage-s-files
 mkdir -p $INSTALLER_DIR/ultibo-coverage-s-files
 cp -a $HOME/ultibo/core/fpc/source/rtl/units/arm-ultibo/*.s $INSTALLER_DIR/ultibo-coverage-s-files
@@ -444,23 +433,23 @@ exitFailure
 make packages_install CROSSINSTALL=1 BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV7A -CfVFPV3 -CIARM -CaEABIHF -OoFASTMATH" OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv7a FPC=$BASE/fpc/bin/fpc INSTALL_PREFIX=$BASE/fpc INSTALL_UNITDIR=$BASE/fpc/units/armv7-ultibo/packages
 exitFailure
 
-# Ultibo RTL for ARM6
-make rtl_clean CROSSINSTALL=1 OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv6 BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV6 -CfVFPV2 -CIARM -CaEABIHF -OoFASTMATH" FPC=$BASE/fpc/bin/fpc
-exitFailure
-make rtl OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv6 BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV6 -CfVFPV2 -CIARM -CaEABIHF -OoFASTMATH" FPC=$BASE/fpc/bin/fpc
-exitFailure
-make rtl_install CROSSINSTALL=1 BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV6 -CfVFPV2 -CIARM -CaEABIHF -OoFASTMATH" OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv6 FPC=$BASE/fpc/bin/fpc INSTALL_PREFIX=$BASE/fpc INSTALL_UNITDIR=$BASE/fpc/units/armv6-ultibo/rtl
-exitFailure
-
-# Packages for ARMv6
-make rtl_clean CROSSINSTALL=1 OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv6 BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV6 -CfVFPV2 -CIARM -CaEABIHF -OoFASTMATH" FPC=$BASE/fpc/bin/fpc
-exitFailure
-make packages_clean CROSSINSTALL=1 OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv6 BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV6 -CfVFPV2 -CIARM -CaEABIHF -OoFASTMATH" FPC=$BASE/fpc/bin/fpc
-exitFailure
-make packages OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv6 BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV6 -CfVFPV2 -CIARM -CaEABIHF -OoFASTMATH -Fu$BASE/fpc/units/armv6-ultibo/rtl" FPC=$BASE/fpc/bin/fpc
-exitFailure
-make packages_install CROSSINSTALL=1 BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV6 -CfVFPV2 -CIARM -CaEABIHF -OoFASTMATH" OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv6 FPC=$BASE/fpc/bin/fpc INSTALL_PREFIX=$BASE/fpc INSTALL_UNITDIR=$BASE/fpc/units/armv6-ultibo/packages
-exitFailure
+## Ultibo RTL for ARM6
+#make rtl_clean CROSSINSTALL=1 OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv6 BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV6 -CfVFPV2 -CIARM -CaEABIHF -OoFASTMATH" FPC=$BASE/fpc/bin/fpc
+#exitFailure
+#make rtl OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv6 BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV6 -CfVFPV2 -CIARM -CaEABIHF -OoFASTMATH" FPC=$BASE/fpc/bin/fpc
+#exitFailure
+#make rtl_install CROSSINSTALL=1 BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV6 -CfVFPV2 -CIARM -CaEABIHF -OoFASTMATH" OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv6 FPC=$BASE/fpc/bin/fpc INSTALL_PREFIX=$BASE/fpc INSTALL_UNITDIR=$BASE/fpc/units/armv6-ultibo/rtl
+#exitFailure
+#
+## Packages for ARMv6
+#make rtl_clean CROSSINSTALL=1 OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv6 BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV6 -CfVFPV2 -CIARM -CaEABIHF -OoFASTMATH" FPC=$BASE/fpc/bin/fpc
+#exitFailure
+#make packages_clean CROSSINSTALL=1 OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv6 BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV6 -CfVFPV2 -CIARM -CaEABIHF -OoFASTMATH" FPC=$BASE/fpc/bin/fpc
+#exitFailure
+#make packages OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv6 BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV6 -CfVFPV2 -CIARM -CaEABIHF -OoFASTMATH -Fu$BASE/fpc/units/armv6-ultibo/rtl" FPC=$BASE/fpc/bin/fpc
+#exitFailure
+#make packages_install CROSSINSTALL=1 BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV6 -CfVFPV2 -CIARM -CaEABIHF -OoFASTMATH" OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv6 FPC=$BASE/fpc/bin/fpc INSTALL_PREFIX=$BASE/fpc INSTALL_UNITDIR=$BASE/fpc/units/armv6-ultibo/packages
+#exitFailure
 
 # Create the Configuration files
 echo "Creating configuration files"
@@ -522,6 +511,9 @@ echo "-XParm-none-eabi-" >> $CONFIGFILE
 echo "-Fu$BASE/fpc/units/armv7-ultibo/rtl" >> $CONFIGFILE
 echo "-Fu$BASE/fpc/units/armv7-ultibo/packages" >> $CONFIGFILE
 echo "-Fl$BASE/fpc/units/armv7-ultibo/lib" >> $CONFIGFILE
+
+echo skipping lazarus
+exit
 
 # Build Lazarus
 # Create the missing Package.fpc for regexpr

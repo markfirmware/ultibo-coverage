@@ -11,7 +11,7 @@ SOURCE=$(basename $SOURCE)
 SOURCE=${SOURCE%.*}.s
 INSERTCOVERAGE=0
 
-for i in arp devices dhcp dns icmp ip iphlapi ipv6 logging network protocol serial services sockets tcp threads transport udp winsock winsock2
+for i in arp console devices dhcp dns ehci globalconfig globalconst globaltypes http icmp ip iphlapi ipv6 logging mmc mmcspi network pl011 pl031 protocol qemuversatilepb rtc serial services sockets spi storage tcp threads transport udp ultibo usb webstatus winsock winsock2 versatilepb xhci
 do
     if [[ $SOURCE == ${i}.s ]]
     then
@@ -21,7 +21,7 @@ do
 done
 
 CORE=$HOME/ultibo/core/fpc/source/rtl/ultibo/core
-COVERAGEMAP=$CORE/coveragemap.pas
+COVERAGEMAP=$CORE/coveragemap.inc
 DATA=$HOME/ultibo/core/fpc/source/rtl/units/arm-ultibo/$SOURCE
 
 if [[ $INSERTCOVERAGE == "1" ]]

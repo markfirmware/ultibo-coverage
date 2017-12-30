@@ -2,4 +2,5 @@ ultibo-coverage-s-files/
 *.bin
 *.elf
 *.o
+*.ppu
 *.txt
