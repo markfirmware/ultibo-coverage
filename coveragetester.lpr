@@ -18,7 +18,7 @@ begin
 end;
 
 const
- TraceLength = 2*1024*1024;
+ TraceLength = 4*1024*1024;
 
 type
  TCoverageEvent = record
@@ -55,7 +55,7 @@ asm
         add    r2,#1 // r2 is the event counter
         ldr    r1,=TraceLength-1
         and    r1,r2 // wrapped index
-        add    r4,r4,r1,lsl #2 // r4 points to event record
+        add    r4,r4,r1,lsl #3 // r4 points to event record
         ldr    r1,[r14,#-4] // get svc instruction
         bic    r1,#0xFF000000 // just the svc code number
         str    r1,[r4,#TCoverageEvent.SubroutineId]
@@ -83,6 +83,7 @@ type
  TCoverageAnalyzer = record
   Meter:PCoverageMeter;
   EventsProcessed:LongWord;
+  HighWater:LongWord;
   Subroutines:Array[0..MaxSubroutines - 1] of TSubroutine;
  end;
 
@@ -100,6 +101,7 @@ begin
     Meter:=@CoverageMeters[CpuId];
     Meter.TraceCounter:=0;
     EventsProcessed:=0;
+    HighWater:=0;
     for I:=Low(Subroutines) to High(Subroutines) do
      with Subroutines[I] do
       begin
@@ -112,47 +114,53 @@ begin
  StartLogging;
  while True do
   begin
-   Sleep(1*1000);
+   Sleep(2*1000);
 // LoggingOutput(Format('cpu 0:%d 1:%d 2:%d 3:%d',[CoverageMeters[0].TraceCounter,CoverageMeters[1].TraceCounter,CoverageMeters[2].TraceCounter,CoverageMeters[3].TraceCounter]));
-   for CpuId:=0 to 3 do
+   for CpuId:=0 to CpuGetCount - 1 do
     begin
      with CoverageAnalyzers[CpuId] do
       begin
        Next:=Meter.TraceCounter;
-//     LoggingOutput(Format('%d %8d more events - total %d',[CpuId,Next - EventsProcessed, Next]));
+       LoggingOutput(Format('%d %8d more events - total %d',[CpuId,Next - EventsProcessed, Next]));
        try
         while EventsProcessed <> Next do
          begin
-          with Meter.TraceBuffer[EventsProcessed and (MaxSubroutines - 1)] do
+          with Meter.TraceBuffer[EventsProcessed and (TraceLength - 1)] do
+           begin
            with Subroutines[SubroutineId] do
             begin
+             if SubroutineId > HighWater then
+              HighWater:=SubroutineId;
              Inc(Counter);
 //           if Counter = 1 then
 //            LoggingOutput(Format('%d %8d id %4d %s',[CpuId,Counter,SubroutineId,SubroutineNames[SubroutineId]]));
              Inc(EventsProcessed);
-             if EventsProcessed mod (1000*1000) = 0 then
+             if EventsProcessed mod (2*1000*1000) = 0 then
               begin
-               LoggingOutput(Format('total %d %d',[CpuId,EventsProcessed]));
+               LoggingOutput(Format('total %d %d high water %d',[CpuId,EventsProcessed,HighWater]));
                Sorter.Clear;
-               for I:=0 to MaxSubroutines do
-                if Subroutines[I].Counter <> 0 then
+               for I:=0 to HighWater do
+                if (Subroutines[I].Counter > 0) and (Subroutines[I].Counter < 1000*1000) then
                  Sorter.Add(@Subroutines[I]);
                Sorter.Sort(CompareCounter);
                for I:=0 to Sorter.Count - 1 do
                 with PSubroutine(Sorter.Items[I])^ do
                  LoggingOutput(Format('%8d %s',[Counter,SubroutineNames[Id]]));
-               for I:=0 to MaxSubroutines do
+               for I:=0 to HighWater do
                 Subroutines[I].Counter:=0;
+               HighWater:=0;
+               LoggingOutput(Format('back log %d',[Meter.TraceCounter - EventsProcessed]));
               end;
+           end;
            end;
          end;
        except on E:Exception do
         begin
+         LoggingOutput(Format('',[]));
+         LoggingOutput(Format('exception %s Next %d EventsProcessed %d',[E.Message,Next,EventsProcessed]));
+         LoggingOutput(Format('',[]));
          EventsProcessed:=Next;
-         LoggingOutput(Format('',[]));
-         LoggingOutput(Format('exception %s',[E.Message]));
-         LoggingOutput(Format('',[]));
-         Sleep(5*1000);
+         Sleep(2*1000);
         end;
        end;
       end;

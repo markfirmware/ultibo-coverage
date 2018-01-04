@@ -11,9 +11,14 @@ SOURCE=$(basename $SOURCE)
 SOURCE=${SOURCE%.*}.s
 INSERTCOVERAGE=0
 
-for i in arp console devices dhcp dns ehci globalconfig globalconst globaltypes http icmp ip iphlapi ipv6 logging mmc mmcspi network pl011 pl031 protocol qemuversatilepb rtc serial services sockets spi storage tcp threads transport udp ultibo usb webstatus winsock winsock2 versatilepb xhci
+#RaspberryPi2.pas
+#RaspberryPi3.pas
+#RaspberryPi.pas
+#RemoteShell.pas
+
+for i in arp console consoleshell devices dhcp dns ehci globalconfig globalconst globaltypes http icmp ip iphlapi ipv6 logging mmc mmcspi network pl011 pl031 protocol qemuversatilepb rtc serial services shellfilesystem shellupdate sockets spi storage tcp threads transport udp ultibo usb webstatus winsock winsock2 versatilepb xhci
 do
-    if [[ $SOURCE == ${i}.s ]]
+    if [[ ${SOURCE,,*} == ${i}.s ]]
     then
         INSERTCOVERAGE=1
         FILENAME=$i
