@@ -3,4 +3,7 @@ ultibo-coverage-s-files/
 *.elf
 *.o
 *.ppu
+*.s
 *.txt
+link.res
+ppas.sh

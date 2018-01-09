@@ -2,84 +2,26 @@ program CoverageTester;
 {$mode delphi}{$h+}
 
 uses
- QEMUVersatilePB,VersatilePb,
- Classes,Console,GlobalConfig,GlobalConst,GlobalTypes,
- Logging,Platform,Serial,StrUtils,SysUtils,Threads,Ultibo,
- CoverageMap;
+ QEMUVersatilePBCoverage,GlobalConfig,Platform,Logging,Serial,SysUtils,Classes,CoverageMap;
 
 procedure StartLogging;
 begin
- LOGGING_INCLUDE_COUNTER:=FALSE;
- LOGGING_INCLUDE_TICKCOUNT:=TRUE;
+ LOGGING_INCLUDE_COUNTER:=False;
  SERIAL_REGISTER_LOGGING:=True;
  SerialLoggingDeviceAdd(SerialDeviceGetDefault);
  SERIAL_REGISTER_LOGGING:=False;
  LoggingDeviceSetDefault(LoggingDeviceFindByType(LOGGING_TYPE_SERIAL));
 end;
 
-const
- TraceLength = 4*1024*1024;
-
-type
- TCoverageEvent = record
-  SubroutineId:LongWord;
-  R0:LongWord;
- end;
-
- PCoverageMeter = ^TCoverageMeter;
- TCoverageMeter = record
-  TraceCounter:LongWord;
-  TraceBuffer:Array[0..TraceLength - 1] of TCoverageEvent;
-  RecordEnd:LongWord;
- end;
-
-var
- CoverageMeters:Array[0..3] of TCoverageMeter;
-
-const
- ARMV7_CP15_C0_MPID_CPUID_MASK        = (3 shl 0);
-
-procedure CoverageSwiHandler; assembler; nostackframe;
-asm
-        stmfd  r13!,{r0-r4,r14}
-        //Read the Multiprocessor Affinity (MPIDR) register from the system control coprocessor CP15
-        mrc    p15,#0,r3,cr0,cr0,#5
-        //Mask off the CPUID value
-        and    r3,#ARMV7_CP15_C0_MPID_CPUID_MASK
-        ldr    r1,=TCoverageMeter.RecordEnd-4
-        mul    r3,r1,r3
-        ldr    r1,=CoverageMeters
-        add    r3,r1 // r3 is the meter
-        add    r4,r3,#TCoverageMeter.TraceBuffer // r4 is the trace buffer
-        ldr    r2,[r3,#TCoverageMeter.TraceCounter]
-        add    r2,#1 // r2 is the event counter
-        ldr    r1,=TraceLength-1
-        and    r1,r2 // wrapped index
-        add    r4,r4,r1,lsl #3 // r4 points to event record
-        ldr    r1,[r14,#-4] // get svc instruction
-        bic    r1,#0xFF000000 // just the svc code number
-        str    r1,[r4,#TCoverageEvent.SubroutineId]
-        str    r0,[r4,#TCoverageEvent.R0]
-        str    r2,[r3,#TCoverageMeter.TraceCounter]
-        ldmfd  r13!,{r0-r4,r15}^
-end;
-
-const
- MaxSubroutines = 16*1024;
-
 type
  PSubroutine = ^TSubroutine;
  TSubroutine = record
   Id:LongWord;
   Counter:LongWord;
+  LastClock:LongWord;
+  PrevClock:LongWord;
  end;
 
-function CompareCounter(A,B:Pointer):Integer;
-begin
- Result:=PSubroutine(A).Counter - PSubroutine(B).Counter;
-end;
-
-type
  TCoverageAnalyzer = record
   Meter:PCoverageMeter;
   EventsProcessed:LongWord;
@@ -90,16 +32,33 @@ type
 var
  I:Integer;
  Next:LongWord;
- CoverageAnalyzers:Array[0..3] of TCoverageAnalyzer;
- CpuId:LongWord;
+ CoverageAnalyzer:TCoverageAnalyzer;
  Sorter:TFPList;
+ Clock:LongWord;
+ LastSubroutineId:LongWord;
+ SequenceNumber:LongWord;
+ Formatted:String;
+ IdleCalibrateSubroutine:PSubroutineDescriptor;
+ ClockGetTotalSubroutine:PSubroutineDescriptor;
+
+function CompareCounter(A,B:Pointer):Integer;
+begin
+ Result:=PSubroutine(A).Counter - PSubroutine(B).Counter;
+ if Result = 0 then
+  Result:=CompareStr(SubroutineDescriptors[PSubroutine(A).Id].Name,SubroutineDescriptors[PSubroutine(B).Id].Name);
+end;
+
+function BackLog:LongWord;
+begin
+ Result:=CoverageMeter.TraceCounter - CoverageAnalyzer.EventsProcessed;
+end;
 
 begin
- for CpuId:=0 to 3 do
-  with CoverageAnalyzers[CpuId] do
+  IdleCalibrateSubroutine:=SubroutineFindDescriptor('THREADS_$$_IDLECALIBRATE$');
+  ClockGetTotalSubroutine:=SubroutineFindDescriptor('PLATFORMQEMUVPB_$$_QEMUVPBCLOCKGETTOTAL$');
+  with CoverageAnalyzer do
    begin
-    Meter:=@CoverageMeters[CpuId];
-    Meter.TraceCounter:=0;
+    Meter:=@CoverageMeter;
     EventsProcessed:=0;
     HighWater:=0;
     for I:=Low(Subroutines) to High(Subroutines) do
@@ -107,21 +66,22 @@ begin
       begin
        Id:=I;
        Counter:=0;
+       LastClock:=0;
+       PrevClock:=0;
       end;
    end;
  Sorter:=TFPList.Create;
- VectorTableSetEntry(VECTOR_TABLE_ENTRY_ARM_SWI,PtrUInt(@CoverageSwiHandler));
+ Clock:=0;
+ LastSubroutineId:=$ffffffff;
+ SequenceNumber:=0;
  StartLogging;
  while True do
   begin
-   Sleep(2*1000);
-// LoggingOutput(Format('cpu 0:%d 1:%d 2:%d 3:%d',[CoverageMeters[0].TraceCounter,CoverageMeters[1].TraceCounter,CoverageMeters[2].TraceCounter,CoverageMeters[3].TraceCounter]));
-   for CpuId:=0 to CpuGetCount - 1 do
     begin
-     with CoverageAnalyzers[CpuId] do
+     with CoverageAnalyzer do
       begin
        Next:=Meter.TraceCounter;
-       LoggingOutput(Format('%d %8d more events - total %d',[CpuId,Next - EventsProcessed, Next]));
+//     LoggingOutput(Format('%8d more events - total %d',[Next - EventsProcessed, Next]));
        try
         while EventsProcessed <> Next do
          begin
@@ -129,15 +89,41 @@ begin
            begin
            with Subroutines[SubroutineId] do
             begin
+             if (EventsProcessed < 80000) and (SubroutineId <> LastSubroutineId) then
+              begin
+               if SubroutineDescriptors[SubroutineId].IsFunction then
+                begin
+                 if R0 < 1*1000*1000 then
+                  Formatted:=Format('%8.8x/%6d',[R0,R0])
+                 else
+                  Formatted:=Format('%8.8x       ',[R0]);
+                end
+               else
+                begin
+                 Formatted:='               ';
+                end;
+               LoggingOutput(Format('%6d %s %s',[SequenceNumber,Formatted,SubroutineDescriptors[SubroutineId].Name]));
+              end;
+             Inc(SequenceNumber);
+             if SubroutineId = IdleCalibrateSubroutine.Id then
+              SequenceNumber:=100*1000;
+             LastSubroutineId:=SubroutineId;
              if SubroutineId > HighWater then
               HighWater:=SubroutineId;
+             if SubroutineId = ClockGetTotalSubroutine.Id then
+              Clock:=R0;
              Inc(Counter);
+             PrevClock:=LastClock;
+             LastClock:=Clock;
 //           if Counter = 1 then
-//            LoggingOutput(Format('%d %8d id %4d %s',[CpuId,Counter,SubroutineId,SubroutineNames[SubroutineId]]));
+//            LoggingOutput(Format('%8d id %4d %s',[Counter,SubroutineId,SubroutineDescriptors[SubroutineId].Name]));
              Inc(EventsProcessed);
-             if EventsProcessed mod (2*1000*1000) = 0 then
+             if EventsProcessed mod (4*1000*1000) = 0 then
               begin
-               LoggingOutput(Format('total %d %d high water %d',[CpuId,EventsProcessed,HighWater]));
+//             asm
+//              svc #5000 // batch log
+//             end;
+               LoggingOutput(Format('total %d high water %d',[EventsProcessed,HighWater]));
                Sorter.Clear;
                for I:=0 to HighWater do
                 if (Subroutines[I].Counter > 0) and (Subroutines[I].Counter < 1000*1000) then
@@ -145,11 +131,11 @@ begin
                Sorter.Sort(CompareCounter);
                for I:=0 to Sorter.Count - 1 do
                 with PSubroutine(Sorter.Items[I])^ do
-                 LoggingOutput(Format('%8d %s',[Counter,SubroutineNames[Id]]));
+                 LoggingOutput(Format('%8d %8d %s',[LastClock - PrevClock,Counter,SubroutineDescriptors[Id].Name]));
                for I:=0 to HighWater do
                 Subroutines[I].Counter:=0;
                HighWater:=0;
-               LoggingOutput(Format('back log %d',[Meter.TraceCounter - EventsProcessed]));
+               LoggingOutput(Format('back log %6d',[BackLog]));
               end;
            end;
            end;

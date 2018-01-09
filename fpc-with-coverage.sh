@@ -9,21 +9,21 @@ fi
 
 SOURCE=$(basename $SOURCE)
 SOURCE=${SOURCE%.*}.s
-INSERTCOVERAGE=0
 
-#RaspberryPi2.pas
-#RaspberryPi3.pas
-#RaspberryPi.pas
-#RemoteShell.pas
+#for i in arp console consoleshell devices dhcp dma dns ehci font framebuffer globalconfig globalconst globaltypes http icmp ip iphlapi ipv6 logging mmc mmcspi network pl011 pl031 pl050 pl110 platform platformarm platformarmv7 platformqemuvpb protocol qemuversatilepb rtc serial services shellfilesystem shellupdate smc91x sockets spi storage tcp threads transport udp ultibo usb webstatus winsock winsock2 versatilepb xhci
 
-for i in arp console consoleshell devices dhcp dns ehci globalconfig globalconst globaltypes http icmp ip iphlapi ipv6 logging mmc mmcspi network pl011 pl031 protocol qemuversatilepb rtc serial services shellfilesystem shellupdate sockets spi storage tcp threads transport udp ultibo usb webstatus winsock winsock2 versatilepb xhci
+INSERTCOVERAGE=1
+for i in system
 do
     if [[ ${SOURCE,,*} == ${i}.s ]]
     then
-        INSERTCOVERAGE=1
-        FILENAME=$i
+        INSERTCOVERAGE=0
     fi
 done
+if [[ ${SOURCE:0:4} == "boot" ]]
+then
+    INSERTCOVERAGE=0
+fi
 
 CORE=$HOME/ultibo/core/fpc/source/rtl/ultibo/core
 COVERAGEMAP=$CORE/coveragemap.inc
@@ -34,7 +34,6 @@ then
     CMD="fpc -s -al $*"
     echo $SOURCE $CMD
     eval $CMD
-    echo " AddFileName('$FILENAME');" >> $COVERAGEMAP
     cp -a $DATA $DATA.in
     awk -f $HOME/github.com/markfirmware/ultibo-coverage/insert-svc.awk $DATA.in > $DATA
     ./ppas.sh

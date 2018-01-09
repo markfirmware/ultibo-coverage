@@ -412,9 +412,11 @@ fi
 make rtl_clean CROSSINSTALL=1 OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv7a BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV7A -CfVFPV3 -CIARM -CaEABIHF -OoFASTMATH" FPC=$BASE/fpc/bin/fpc
 exitFailure
 echo 0 > $BASE/fpc/source/rtl/ultibo/core/coveragesubroutinecounter.txt
-sed -i '/^procedure StartupHandler;$/a procedure CoverageSvcHandler;' $BASE/fpc/source/rtl/ultibo/core/bootqemuvpb.pas
-sed -i '/^end\.$/i procedure CoverageSvcHandler; assembler; nostackframe;\nasm\n stmfd r13!,{r14}\n ldmfd r13!,{r15}^\nend;' $BASE/fpc/source/rtl/ultibo/core/bootqemuvpb.pas
+sed -i '/^procedure StartupHandler;$/a procedure CoverageSvcHandler;\nconst\n TraceLength = 8*1024*1024;\n \ntype\n TCoverageEvent = record\n SubroutineId:LongWord;\n R0:LongWord;\n end;\n \n PCoverageMeter = ^TCoverageMeter;\n TCoverageMeter = record\n TraceCounter:LongWord;\n TraceBuffer:Array[0..TraceLength - 1] of TCoverageEvent;\n RecordEnd:LongWord;\n end;\n \n var\n CoverageMeter:TCoverageMeter;\n' $BASE/fpc/source/rtl/ultibo/core/bootqemuvpb.pas
+sed -i '/^end\.$/i procedure CoverageSvcHandler; assembler; nostackframe;\nasm\n stmfd r13!,{r0-r4,r14}\n ldr    r3,=CoverageMeter\n add    r4,r3,#TCoverageMeter.TraceBuffer\n ldr    r2,[r3,#TCoverageMeter.TraceCounter]\n add    r2,#1\n ldr    r1,=TraceLength-1\n and    r1,r2\n add    r4,r4,r1,lsl #3\n ldr    r1,[r14,#-4]\n bic    r1,#0xFF000000\n str    r1,[r4,#TCoverageEvent.SubroutineId]\n str    r0,[r4,#TCoverageEvent.R0]\n str    r2,[r3,#TCoverageMeter.TraceCounter]\n ldmfd r13!,{r0-r4,r15}^\nend;' $BASE/fpc/source/rtl/ultibo/core/bootqemuvpb.pas
+sed -i '/Save the pointer/i ldr r3,=SvcStack+512\nbic r3,#0xf\n mov sp,r3' $BASE/fpc/source/rtl/ultibo/core/bootqemuvpb.pas
 sed -i 's/ARMv7SoftwareInterruptHandler/CoverageSvcHandler/g' $BASE/fpc/source/rtl/ultibo/core/bootqemuvpb.pas
+sed -i '/^implementation$/a var\nSvcStack:Array[0..1023] of LongWord;' $BASE/fpc/source/rtl/ultibo/core/bootqemuvpb.pas
 make rtl OS_TARGET=ultibo CPU_TARGET=arm SUBARCH=armv7a BINUTILSPREFIX=arm-none-eabi- FPCFPMAKE=$BASE/fpc/bin/fpc CROSSOPT="-CpARMV7A -CfVFPV3 -CIARM -CaEABIHF -OoFASTMATH" FPC=$INSTALLER_DIR/fpc-with-coverage.sh
 exitFailure
 rm -rf $INSTALLER_DIR/ultibo-coverage-s-files
